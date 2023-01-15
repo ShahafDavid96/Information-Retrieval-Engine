@@ -1,7 +1,7 @@
 # Information-Retrieval-Engine
 
 title - Search Engine on Wikipedia\
-In this project we implimented a search engine that searches for relevente wikipedia pages given a query.
+In this project we implimented a search engine that searches for relevant wikipedia pages given a query.
 
 ## code structure:
 search_frontend.py\
