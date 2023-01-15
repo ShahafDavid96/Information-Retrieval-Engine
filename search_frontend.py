@@ -179,8 +179,8 @@ def get_pageview():
     # END SOLUTION
     return jsonify(res)
 
-@app.route("/search_config")
-def search_config():
+@app.route("/grid_search")
+def grid_search():
     res = []
     query = request.args.get('query', '')
     if len(query) == 0:
@@ -195,21 +195,12 @@ def search_config():
     page_views_w = float(request.args.get('page_views_w', ''))
     print(f"starting query: bw:{body_w}, tw:{title_w}, prw:{page_rank_w}, pvw:{page_views_w}")
     config = {'body_k': body_k, 'body_b': body_b, 'body_w': body_w, 'title_k': title_k, 'title_b': title_b, 'title_w': title_w, 'page_rank_w': page_rank_w, 'page_views_w': page_views_w}
-    res = search_handler.search_config(query, config)
+    res = search_handler.grid_search(query, config)
 
-    # res = SearchHandler.search(query)
+
     return jsonify(res)
 
 if __name__ == '__main__':
     # run the Flask RESTful API, make the server publicly available (host='0.0.0.0') on port 8080
     app.run(host='0.0.0.0', port=8080, debug=True)
-    # t = time.time()
-    #print(search_handler.search_config("best marvel movie",{'body_k': 0.5, 'body_b': 0.5, 'body_w': 0.2, 'title_k': 0.5, 'title_b': 0.1, 'title_w': 0.1, 'page_rank_w': 0.1, 'page_views_w': 0.2}))
-    # print(time.time() - t)
-    #
-
-
-    # print(search_handler.get_page_rank([60438820,18674251,33700618,6826364]))
-    # print(search_handler.get_page_view([60438820,18674251,33700618,6826364]))
-    # t=time.time()#
-    # print(time.time()-t)
+    #search_handler.search("Hello worlds")

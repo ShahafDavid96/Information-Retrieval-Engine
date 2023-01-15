@@ -47,16 +47,42 @@ class SearchHandler:
     Attributes
     ----------
     handler : ReadFromGcp obj
-    inverted_index : InvertedIndex object
-
+    inverted_index : dict containing the readed pickle files
+    idx_body : InvertedIndex() object
+    idx_title : InvertedIndex() object
+    idx_anchor : InvertedIndex() object
     Methods
     -------
     search_body(q):
         Function that returns the best 100 documents
+
+    query_exp(q):
+        Function that extend a given query with the most similar word where the cossim is greater than 0.85
+
+    search(q):
+        Function that for a given query returns the best 100 (docs_id, title) calculating with BM25 values for body and title, page rank value and page view value.
+        (doc_id, score= w1 * BM25_body+ w2 *BM25_title + w3* page rank + w4* page view)
+
+    search_body(q):
+        Function that returns the best 100 docs calculating with TF-IDF CosSim sorted from the best doc_id score DESC.
+
+    search_title(q):
+        Function that returns ALL the docs that any query word appear in the doc title, sorted by the number of query words appear in the title of a given doc .
+
+    search_anchor(q):
+        Function that returns ALL the docs that any query word appear in the doc anchors links, sorted by the number of query words appear in the anchor of a given doc .
+
+    get_page_rank(q):
+        Function that for a given list of docs returns list of page ranks.
+
+    get_page_view(q):
+        Function that for a given list of docs returns list of page views.
+
     """
 
     def __init__(self):
         self.handler = ReadFromGcp("316233154")
+        print("download indexs and files")
         self.inverted_index = {
             "body": self.handler.get_inverted_index(source_idx=f"postings_gcp_text/index.pkl",
                                                     dest_file=f"text_index.pkl"),
@@ -71,8 +97,11 @@ class SearchHandler:
             # "stem_body": self.handler.get_inverted_index(source_idx=f'postings_gcp_text_with_stemming/index.pkl',dest_file=f"stem_text_index.pkl")
             # "stem_title":self.handler.get_inverted_index(source_idx=f'postings_gcp_title_with_stemming/index.pkl',dest_file=f"stem_title_index.pkl")
         }
+        print("load body index")
         self.idx_body = self.inverted_index["body"].read_index('.', 'text_index')
+        print("load title index")
         self.idx_title = self.inverted_index["title"].read_index('.', 'title_index')
+        print("load anchor index")
         self.idx_anchor = self.inverted_index["anchor"].read_index('.', 'anchor_index')
         # self.idx_stem_body = self.inverted_index["stem_body"].read_index('.', 'stem_text_index')
         # # self.idx_stem_title = self.inverted_index["stem_title"].read_index('.', 'stem_title_index')
@@ -125,8 +154,8 @@ class SearchHandler:
 
         BM25_title = BM25_from_index(self.idx_title, title_post)
         bm25_title_train = BM25_title.search(query, 100)
-        page_rank_res = self.get_page_rank([doc_id for doc_id, _ in bm25_text_train])
-        page_views_res = self.get_page_view([doc_id for doc_id, _ in bm25_text_train])
+        page_rank_res = [(self.page_rank.get(doc_id,0),0) for doc_id, _ in bm25_text_train]
+        page_views_res = [(self.page_view.get(doc_id,0),0) for doc_id, _ in bm25_text_train]
 
         merge = multi_merge_results([bm25_text_train, bm25_title_train,page_rank_res,page_views_res],[0.5, 0.3,0.1,0.1], 20)
         res = []
@@ -140,7 +169,7 @@ class SearchHandler:
 
         Parameters
         ----------
-        q : str
+        q : str (query)
             The sound the animal makes (default is None)
 
         Return
@@ -184,7 +213,7 @@ class SearchHandler:
                 else:
                     cos_dict[doc_id] = cos_dict[doc_id] + np.dot(tfidf, Q[word])
         cos_sim_results = []
-        # print(self.inverted_index["norm"])
+
         for doc_id in cos_dict:
             cos_sim_results.append((doc_id, cos_dict[doc_id] / (self.inverted_index["norm"][doc_id] * q_norm_sum)))
         # result = sorted(
@@ -237,12 +266,13 @@ class SearchHandler:
 
     def search_anchor(self, q):
         """
-        This function returns the 100 documents.
+        This function returns the ALL the documents who have one of the query words in thier anchor.
 
         Parameters
         ----------
         q : str
-            The sound the animal makes (default is None)
+            q as a query to search for,
+            ex: The sound the animal makes (default is None)
 
         Return
         -----
@@ -272,23 +302,49 @@ class SearchHandler:
             try:
                 res.append((key, self.inverted_index["titles_dict"][key]))
             except:
-                res.append(key)
+                res.append((key,""))
         return res
 
     def get_page_rank(self, docs):
+        """
+        This function returns list of page rank values for a given docs list
+
+        Parameters
+        ----------
+        docs : list
+
+            list of docs: [1515,2658,12318]
+
+        Return
+        -----
+        result : List[Tuples(doc_id, title)]
+        """
         res = []
 
         for doc in docs:
-            res.append((doc,self.page_rank.get(doc,0)))
+            res.append((doc,self.inverted_index["page_rank"].get(doc,0)))
         return res
 
     def get_page_view(self, docs):
+        """
+         This function returns list of page views values for a given docs list
+
+        Parameters
+        ----------
+        docs : list
+
+            list of docs: [1515,2658,12318]
+
+        Return
+        -----
+        result : List[Tuples(doc_id, title)]
+        """
         res = []
         for doc in docs:
-            res.append((doc,self.page_view.get(doc,0)))
+            res.append((doc,(doc,self.inverted_index["page_view"].get(doc,0))))
         return res
 
-    def search_config(self, query, config):
+    def grid_search(self, query, config):
         query = tokenize(query)
         text_post = {}
         title_post = {}
@@ -551,14 +607,17 @@ def merge_results(title_scores, body_scores, title_weight=0.5, text_weight=0.5, 
 def multi_merge_results(scores, weights, N=100):
     merged_scores = {}
     for tuples_list, weight in zip(scores, weights):
-        try:
-            for id , score in tuples_list:
+
+        for id , score in tuples_list:
+            try:
+
                 if id in merged_scores:
                     merged_scores[id] += score * weight
                 else:
                     merged_scores[id] = score * weight
-        except:
-            print(tuples_list)
+            except:
+                print("eror")
+
 
     merged_list = [(k, v) for k, v in sorted(merged_scores.items(), key=lambda item: item[1], reverse=True)]
 
