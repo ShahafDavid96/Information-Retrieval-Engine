@@ -4,8 +4,8 @@ title - Search Engine on Wikipedia
 In this project we implimented a search engine that searches for relevente wikipedia pages given a query.
 
 ## code structure:
-search_frontend.py
-search_backend.py
+search_frontend.py \n 
+search_backend.py \n
 GCP_handler.py
 inverted_index_gcp.py
 
